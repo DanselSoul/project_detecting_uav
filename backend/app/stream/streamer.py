@@ -16,17 +16,17 @@ FRAME_QUEUE_SIZE = 25
 def video_generator(camera_id: int = 1):
     video_path = os.path.join(VIDEO_DIR, f"video_{camera_id}.mp4")
 
-    # === Если видео нет — переключаемся на заглушку ===
+    # Если видео не найдено — используем заглушку
+    # В блоке генерации placeholder (если видео не найдено)
     if not os.path.isfile(video_path):
         print(f"[WARN] Video for cam {camera_id} not found, using placeholder.")
-
+        from backend.app.state.detection_state import clear_detection
+        clear_detection(camera_id)  # сброс состояния обнаружения для камеры
         if not os.path.isfile(PLACEHOLDER_PATH):
             raise FileNotFoundError(f"Placeholder image not found at: {PLACEHOLDER_PATH}")
-
         placeholder_img = cv2.imread(PLACEHOLDER_PATH)
         if placeholder_img is None:
             raise RuntimeError("Failed to load placeholder image.")
-
         while True:
             annotated = placeholder_img.copy()
             cv2.putText(annotated, f"CAM-{camera_id} | Нет сигнала", (10, 30),
@@ -35,7 +35,8 @@ def video_generator(camera_id: int = 1):
             yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg.tobytes() + b"\r\n")
             time.sleep(0.2)
 
-    # === Основной путь: видео найдено ===
+
+    # Открываем видеофайл
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise RuntimeError(f"Can't open video: {video_path}")
@@ -56,6 +57,7 @@ def video_generator(camera_id: int = 1):
             if frame is None:
                 break
 
+            # Обработка кадра с детекцией и трекингом
             result = detect_and_track(frame, camera_id=camera_id, conf_threshold=CONF_THRESHOLD)
             end = time.time()
 

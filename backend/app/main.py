@@ -1,13 +1,19 @@
-from fastapi import FastAPI, WebSocket, Query
+from fastapi import FastAPI, WebSocket, Query, HTTPException, Depends
 import asyncio
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime, timedelta
 from pydantic import BaseModel
-from backend.app.routes import auth
 from starlette.websockets import WebSocketState
+from sqlalchemy.orm import Session
+from backend.app.db import SessionLocal
+from backend.app.models.detection_record import DetectionRecord
+from backend.app.state.detection_state import is_detection_active  # проверка состояния детекции
+from backend.app.state.detection_state import set_detection, clear_detection  # управление состоянием
+from backend.app.routes import auth  # маршруты аутентификации
 
 app = FastAPI()
+app.include_router(auth.router, prefix="/auth")
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,11 +22,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Имитация базы данных для хранения записей о детекции ---
-detection_records = []  # Список для хранения записей
-
-# Словарь для хранения состояния "остановки" уведомлений по камерам:
-paused_alerts = {}  # key: cam_id, value: datetime до которого уведомления отключены
+# Словарь для управления режимом "cooldown" уведомлений по камерам
+paused_alerts = {}  # ключ: cam_id, значение: время до которого уведомления приостановлены
 
 def is_camera_in_cooldown(cam_id: int) -> bool:
     if cam_id in paused_alerts:
@@ -30,18 +33,37 @@ def is_camera_in_cooldown(cam_id: int) -> bool:
 def set_camera_cooldown(cam_id: int, cooldown_seconds: int = 60):
     paused_alerts[cam_id] = datetime.now() + timedelta(seconds=cooldown_seconds)
 
+# Dependency для получения сессии базы данных
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-app.include_router(auth.router, prefix="/auth")
+# Модель для валидации входящих данных детекции
+class AlertRecord(BaseModel):
+    cam: int
+    detected: bool
 
-# --- WebSocket-эндпоинт для отправки уведомлений ---
+# Обновлённый WebSocket‑эндпоинт, который извлекает параметр cam
 @app.websocket("/ws/alerts")
 async def alert_socket(websocket: WebSocket):
     await websocket.accept()
-    cam_id = 1  # В данном примере работа ведётся для камеры 1
+    cam_id_str = websocket.query_params.get("cam", "1")
+    try:
+        cam_id = int(cam_id_str)
+    except ValueError:
+        cam_id = 1
+
     try:
         while True:
-            # Если камера в режиме "остановки" – пропускаем отправку уведомления
             if is_camera_in_cooldown(cam_id):
+                await asyncio.sleep(1)
+                continue
+
+            # Отправляем уведомление только если в кадре зафиксировано обнаружение БПЛА
+            if not is_detection_active(cam_id):
                 await asyncio.sleep(1)
                 continue
 
@@ -56,29 +78,18 @@ async def alert_socket(websocket: WebSocket):
             await websocket.close()
         print("WebSocket connection closed")
 
-# --- Эндпоинт для видеопотока (оставляем без изменений) ---
+# Остальные эндпоинты (видеопоток и запись детекции) остаются без изменений
 @app.get("/video-feed")
 def video_feed(cam: int = Query(1)):
-    # Здесь функция video_generator должна возвращать видеопоток для камеры cam
     from backend.app.stream.streamer import video_generator
     return StreamingResponse(video_generator(camera_id=cam), media_type="multipart/x-mixed-replace; boundary=frame")
 
-# --- Модель данных для записи детекции ---
-class AlertRecord(BaseModel):
-    cam: int
-    detected: bool
-
-# --- Эндпоинт для сохранения информации о детекции ---
 @app.post("/alert/detection")
-async def record_detection(record: AlertRecord):
-    # Создаем запись (в реальном приложении здесь можно использовать ORM для вставки в БД)
-    detection_records.append({
-        "cam": record.cam,
-        "detected": record.detected,
-        "timestamp": datetime.now()
-    })
-    print(f"Detection recorded: {detection_records[-1]}")
-    
-    # Устанавливаем режим "остановки" уведомлений для камеры на 1 минуту
+async def record_detection(record: AlertRecord, db: Session = Depends(get_db)):
+    detection = DetectionRecord(cam=record.cam, detected=record.detected)
+    db.add(detection)
+    db.commit()
+    db.refresh(detection)
+    print(f"Detection recorded: {detection.id} for camera {detection.cam} at {detection.timestamp}")
     set_camera_cooldown(record.cam, 60)
     return {"status": "ok", "message": "Detection recorded, alerts suspended for 1 minute"}
