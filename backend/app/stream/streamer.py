@@ -4,7 +4,9 @@ import time
 import threading
 import queue
 from collections import deque
+
 from backend.app.yolo.uav_detector import detect_and_track
+from backend.app.state.detection_state import clear_detection  # импорт для сброса
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIDEO_DIR = os.path.join(BASE_DIR, "sample_videos")
@@ -16,25 +18,36 @@ FRAME_QUEUE_SIZE = 25
 def video_generator(camera_id: int = 1):
     video_path = os.path.join(VIDEO_DIR, f"video_{camera_id}.mp4")
 
-    # Если видео не найдено — используем заглушку
-    # В блоке генерации placeholder (если видео не найдено)
+    # Если видео не найдено — используем заглушку и сбрасываем флаг детекции
     if not os.path.isfile(video_path):
         print(f"[WARN] Video for cam {camera_id} not found, using placeholder.")
-        from backend.app.state.detection_state import clear_detection
-        clear_detection(camera_id)  # сброс состояния обнаружения для камеры
+        clear_detection(camera_id)
+
         if not os.path.isfile(PLACEHOLDER_PATH):
             raise FileNotFoundError(f"Placeholder image not found at: {PLACEHOLDER_PATH}")
         placeholder_img = cv2.imread(PLACEHOLDER_PATH)
         if placeholder_img is None:
             raise RuntimeError("Failed to load placeholder image.")
+
         while True:
             annotated = placeholder_img.copy()
-            cv2.putText(annotated, f"CAM-{camera_id} | Нет сигнала", (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            cv2.putText(
+                annotated,
+                f"CAM-{camera_id} | Нет сигнала",
+                (10, 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 0, 255),
+                2
+            )
             _, jpeg = cv2.imencode(".jpg", annotated)
-            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg.tobytes() + b"\r\n")
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n\r\n" +
+                jpeg.tobytes() +
+                b"\r\n"
+            )
             time.sleep(0.2)
-
 
     # Открываем видеофайл
     cap = cv2.VideoCapture(video_path)
@@ -57,8 +70,12 @@ def video_generator(camera_id: int = 1):
             if frame is None:
                 break
 
-            # Обработка кадра с детекцией и трекингом
-            result = detect_and_track(frame, camera_id=camera_id, conf_threshold=CONF_THRESHOLD)
+            # Передаем camera_id в detect_and_track
+            result = detect_and_track(
+                frame,
+                camera_id=camera_id,
+                conf_threshold=CONF_THRESHOLD
+            )
             end = time.time()
 
             processed_frame[0] = result
@@ -81,10 +98,22 @@ def video_generator(camera_id: int = 1):
             if processed_frame[0] is not None:
                 avg_fps = sum(fps_history) / len(fps_history) if fps_history else 0.0
                 annotated = processed_frame[0].copy()
-                cv2.putText(annotated, f"CAM-{camera_id} | FPS: {avg_fps:.2f}", (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                cv2.putText(
+                    annotated,
+                    f"CAM-{camera_id} | FPS: {avg_fps:.2f}",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (255, 255, 255),
+                    2
+                )
                 _, jpeg = cv2.imencode(".jpg", annotated)
-                yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + jpeg.tobytes() + b"\r\n")
+                yield (
+                    b"--frame\r\n"
+                    b"Content-Type: image/jpeg\r\n\r\n" +
+                    jpeg.tobytes() +
+                    b"\r\n"
+                )
 
             time.sleep(0.005)
     finally:

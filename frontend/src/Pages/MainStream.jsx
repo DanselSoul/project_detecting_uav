@@ -1,52 +1,52 @@
+// MainStream.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { useWebSocket } from "../WebSocketProvider/WebSocketProvider";
 
-const cameras = [
-  { id: 1, name: "Камера 1", src: "http://localhost:8000/video-feed?cam=1" },
-  { id: 2, name: "Камера 2", src: "http://localhost:8000/video-feed?cam=2" },
-  { id: 3, name: "Камера 3", src: "http://localhost:8000/video-feed?cam=3" },
-  { id: 4, name: "Камера 4", src: "http://localhost:8000/video-feed?cam=4" },
-];
+const BACKEND = import.meta.env.VITE_BACKEND_URL || "http://localhost:8000";
+
+const cameras = [1,2,3,4].map(i => ({
+  id: i,
+  name: `Камера ${i}`,
+  src: `${BACKEND}/video-feed?cam=${i}`
+}));
 
 export default function MainStream({ onLogout }) {
   const navigate = useNavigate();
-  const { message, alertCamera } = useWebSocket();  // Получаем информацию о камере с тревогой
-
-  console.log("alertCamera in MainStream:", alertCamera);  // Логируем значение alertCamera
-  console.log("message in MainStream:", message);  // Логируем сообщение
+  const { message, alertCameras } = useWebSocket();
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
+      {/* шапка */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Потоки с камер</h1>
-        <button
-          onClick={onLogout}
-          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
-        >
-          Выйти
-        </button>
+        <button onClick={onLogout} className="bg-red-500 px-4 py-2 rounded">Выйти</button>
       </div>
 
+      {/* сетка */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-6">
-        {cameras.map((cam) => (
-          <div
-            key={cam.id}
-            className={`cursor-pointer border-2 ${alertCamera === cam.id ? "border-red-600" : "border-gray-700"} rounded-lg overflow-hidden hover:shadow-xl transition duration-200`}
-            onClick={() => navigate(`/camera/${cam.id}`)}
-          >
-            <img
-              src={cam.src}
-              alt={cam.name}
-              className="w-full h-64 object-cover bg-black"
-            />
-            <div className="p-3 text-center bg-gray-800">{cam.name}</div>
-          </div>
-        ))}
+        {cameras.map(cam => {
+          const isAlert = alertCameras.includes(cam.id);
+          return (
+            <div
+              key={cam.id}
+              onClick={()=>navigate(`/camera/${cam.id}`)}
+              className={`cursor-pointer border-4 ${
+                isAlert ? "border-red-600" : "border-gray-700"
+              } rounded-lg overflow-hidden transition`}
+            >
+              <img src={cam.src} alt={cam.name}
+                   className="w-full h-64 object-cover bg-black" />
+              <div className="p-3 text-center bg-gray-800">{cam.name}</div>
+            </div>
+          );
+        })}
       </div>
 
+      {/* снизу */}
       {message && (
-        <div className="alert-box text-red-500 font-bold mt-4">
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2
+                        bg-red-600 text-white px-6 py-3 rounded">
           {message}
         </div>
       )}
