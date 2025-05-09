@@ -13,5 +13,8 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+from backend.app.models.user import User           # все ваши модели, в т.ч. DetectionRecord
+from backend.app.models.detection_record import DetectionRecord
+
 # автоматически создаём все таблицы, если их нет
 Base.metadata.create_all(bind=engine)

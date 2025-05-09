@@ -1,59 +1,97 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useWebSocket } from "../WebSocketProvider/WebSocketProvider";
 
 export default function SingleCamera() {
   const { id } = useParams();
-  const navigate = useNavigate();
+  const cam = Number(id) || 1;
+  const nav = useNavigate();
+  const { alertMap, clearTrack } = useWebSocket();
+  const [confirmed, setConfirmed] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const [detection, setDetection] = useState(null); // {cam, detId}
-  const [showToast, setShowToast] = useState(false);
+  const trackIds = alertMap[cam] || [];
+  const latestTrackId = trackIds[trackIds.length - 1] || null;
+  const showAlert = latestTrackId !== null && confirmed === null;
 
-  useEffect(() => {
-    const ws = new WebSocket(`ws://localhost:8000/ws/alerts?cam=${id}`);
-    ws.onmessage = (e) => {
-      const [cam, detId] = e.data.split("|").map(Number);
-      setDetection({ cam, detId });
-      setShowToast(true);
-    };
-    ws.onclose = () => console.log("WS closed");
-    return () => ws.close();
-  }, [id]);
+  const sendValidation = async (decision) => {
+    if (!latestTrackId) return;
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:8000/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cam: cam,
+          track_id: latestTrackId,
+          validated: decision,
+          comment: decision ? "Подтверждено оператором" : "Отклонено оператором",
+          decision_source: "operator"
+        })
+      });
 
-  const respond = async (valid) => {
-    await fetch("http://localhost:8000/validate", {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ detection_id: detection.detId, validated: valid })
-    });
-    setShowToast(false);
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.detail || "Ошибка при сохранении");
+        return;
+      }
+
+      setConfirmed(decision);
+      clearTrack(cam, latestTrackId);
+    } catch (err) {
+      console.error("Ошибка отправки:", err);
+      setError("Сервер недоступен");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="p-4 relative">
       <button
-        onClick={() => navigate(-1)}
-        className="mb-4 px-4 py-2 bg-blue-500 text-white rounded"
-      >Назад</button>
-
-      <h1 className="text-xl font-bold mb-4">Камера #{id}</h1>
+        onClick={() => nav(-1)}
+        className="mb-4 bg-blue-500 px-4 py-2 rounded text-white"
+      >
+        Назад
+      </button>
+      <h1 className="text-xl mb-4">Камера №{cam}</h1>
       <img
-        src={`http://localhost:8000/video-feed?cam=${id}`}
-        alt={`Камера ${id}`}
+        src={`http://localhost:8000/video-feed?cam=${cam}`}
+        alt={`Камера ${cam}`}
         className="w-full border rounded"
       />
 
-      {showToast && (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white bg-opacity-90 p-4 rounded shadow-lg flex items-center space-x-4">
-          <span className="font-medium">Дрон обнаружен на камере #{id}</span>
+      {showAlert && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-4 rounded shadow-lg z-50">
+          <p className="mb-2 text-red-600">
+            Обнаружен объект (ID: {latestTrackId})
+          </p>
           <button
-            onClick={() => respond(true)}
-            className="px-3 py-1 bg-green-500 text-white rounded"
-          >Подтвердить</button>
+            onClick={() => sendValidation(true)}
+            disabled={loading}
+            className="bg-green-500 text-white px-3 py-1 mr-2 rounded"
+          >
+            Подтвердить
+          </button>
           <button
-            onClick={() => respond(false)}
-            className="px-3 py-1 bg-red-500 text-white rounded"
-          >Отклонить</button>
+            onClick={() => sendValidation(false)}
+            disabled={loading}
+            className="bg-gray-500 text-white px-3 py-1 rounded"
+          >
+            Отклонить
+          </button>
         </div>
+      )}
+
+      {confirmed !== null && (
+        <p className="mt-4 text-green-400">
+          Вы {confirmed ? "подтвердили" : "отклонили"} обнаружение
+        </p>
+      )}
+
+      {error && (
+        <p className="mt-4 text-red-500">Ошибка: {error}</p>
       )}
     </div>
   );

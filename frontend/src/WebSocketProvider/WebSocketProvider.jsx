@@ -1,41 +1,68 @@
-// WebSocketProvider.jsx
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 
-const WebSocketContext = createContext();
-export const useWebSocket = () => useContext(WebSocketContext);
+const WSContext = createContext();
+export const useWebSocket = () => useContext(WSContext);
 
-export const WebSocketProvider = ({ children, cameraId: propCameraId }) => {
-  const routeParams = useParams();
-  const camId = propCameraId || routeParams.id || "1";
-
+export function WebSocketProvider({ children }) {
   const [message, setMessage] = useState("");
-  const [alertCameras, setAlertCameras] = useState([]);  // теперь массив
-  const [ws, setWs] = useState(null);
+  const [alertMap, setAlertMap] = useState({});
 
   useEffect(() => {
-    const websocket = new WebSocket(`ws://localhost:8000/ws/alerts?cam=${camId}`);
+    const socket = new WebSocket(`ws://localhost:8000/ws/alerts`);
 
-    websocket.onopen = () => console.log("WS open for cam", camId);
+    // При подключении запрашиваем текущие активные тревоги
+    fetch("http://localhost:8000/active-alerts")
+      .then((res) => res.json())
+      .then((initial) => {
+        console.log("[WS] Initial alerts:", initial);
+        setAlertMap(initial);
+      });
 
-    websocket.onmessage = (e) => {
-      let obj;
-      try { obj = JSON.parse(e.data); }
-      catch { return console.warn("WS не JSON:", e.data); }
-
-      const cams = obj.alerts || [];
-      setMessage(`Обнаружено на камерах: ${cams.join(", ")}`);
-      setAlertCameras(cams);
+    socket.onopen = () => {
+      console.log("[WS] Connected to /ws/alerts");
     };
 
-    websocket.onclose = () => console.log("WS closed for cam", camId);
-    websocket.onerror = (err) => console.error("WS error", err);
+    socket.onmessage = (e) => {
+      console.log("[WS] Message received:", e.data);
+      setMessage(e.data);
 
-    setWs(websocket);
-    return () => { if (websocket.readyState===WebSocket.OPEN) websocket.close(); };
-  }, [camId]);
+      const match = e.data.match(/camera (\d+): track (\d+) detected/);
+      if (match) {
+        const cam = Number(match[1]);
+        const tid = Number(match[2]);
 
-  return <WebSocketContext.Provider value={{ ws, message, alertCameras }}>
-    {children}
-  </WebSocketContext.Provider>;
-};
+        setAlertMap((prev) => {
+          const current = prev[cam] || [];
+          const updated = current.includes(tid) ? current : [...current, tid];
+          return { ...prev, [cam]: updated };
+        });
+      }
+    };
+
+    socket.onerror = (err) => {
+      console.error("[WS] Error:", err);
+    };
+
+    socket.onclose = () => {
+      console.warn("[WS] Connection closed");
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, []);
+
+  const clearTrack = (cam, trackId) => {
+    setAlertMap((prev) => ({
+      ...prev,
+      [cam]: (prev[cam] || []).filter((t) => t !== trackId),
+    }));
+    setMessage("");
+  };
+
+  return (
+    <WSContext.Provider value={{ message, alertMap, clearTrack }}>
+      {children}
+    </WSContext.Provider>
+  );
+}
