@@ -1,10 +1,11 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Body
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query, Body, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import asyncio
+import time
 
-
-from backend.app.stream.streamer import video_generator
+from backend.app.stream.streamer import get_frame, start_stream
 from backend.app.state.detection_state import get_events, get_active_alerts
 from backend.app.db import SessionLocal
 from backend.app.models.detection_record import DetectionRecord, ValidationRecord
@@ -13,7 +14,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # или ["http://localhost:5173"] — если хочешь строго
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -24,11 +25,20 @@ def ping():
     return {"status": "ok"}
 
 @app.get("/video-feed")
-def video_feed(cam: int = Query(1)):
-    return StreamingResponse(
-        video_generator(cam),
-        media_type="multipart/x-mixed-replace; boundary=frame"
-    )
+def video_feed(
+    cam: int = Query(...),
+    live: bool = Query(True),
+    seek: float = Query(None)
+):
+    def gen():
+        start_stream(cam)
+        while True:
+            frame = get_frame(cam, live=live, seek_time=seek)
+            if frame:
+                yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
+            time.sleep(1 / 10)
+
+    return StreamingResponse(gen(), media_type="multipart/x-mixed-replace; boundary=frame")
 
 @app.get("/active-alerts")
 def get_active():
@@ -42,7 +52,7 @@ async def alerts_socket(websocket: WebSocket):
     try:
         while True:
             await asyncio.sleep(0.5)
-            events = get_events()  # ← только новые
+            events = get_events()
             for cam_id, track_ids in events.items():
                 for tid in track_ids:
                     await websocket.send_text(f"camera {cam_id}: track {tid} detected")
@@ -61,13 +71,11 @@ def validate_detection(
 ):
     db = SessionLocal()
 
-    # Найти detection-запись
     detection = db.query(DetectionRecord).filter_by(cam=cam, track_id=track_id).first()
     if not detection:
         db.close()
         raise HTTPException(status_code=404, detail="Detection not found")
 
-    # Создать запись подтверждения
     validation = ValidationRecord(
         detection_id=detection.id,
         validated=validated,
@@ -77,10 +85,8 @@ def validate_detection(
         comment=comment
     )
     db.add(validation)
-
-    # Обновить detection
     detection.is_validated = True
-
     db.commit()
     db.close()
+
     return {"status": "ok", "validated": validated}

@@ -4,15 +4,17 @@ from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 from backend.app.db import SessionLocal
 from backend.app.models.detection_record import DetectionRecord
-from backend.app.state.detection_state import (
-    is_new_track, push_event
-)
+from backend.app.state.detection_state import is_new_track, push_event
 
-# Загружаем YOLO модель один раз
-model = YOLO("backend/app/yolo/yolo11n_best.pt")
+from backend.app.yolo.yolo_model import model
+import threading
 
-# Один DeepSort на каждую камеру
+# 🔒 Глобальная блокировка для безопасной работы с моделью
+_model_lock = threading.Lock()
+
+# Один DeepSort трекер на каждую камеру
 _trackers = {}
+
 def get_tracker(camera_id: int):
     if camera_id not in _trackers:
         _trackers[camera_id] = DeepSort(
@@ -23,7 +25,10 @@ def get_tracker(camera_id: int):
 
 def detect_and_track(frame, camera_id: int, conf_threshold=0.5):
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = model.predict(rgb, conf=conf_threshold, verbose=False)[0]
+
+    #Потокобезопасный вызов модели
+    with _model_lock:
+        results = model.predict(rgb, conf=conf_threshold, verbose=False)[0]
 
     dets = []
     for box in results.boxes:
@@ -43,22 +48,15 @@ def detect_and_track(frame, camera_id: int, conf_threshold=0.5):
         local_tid = int(tr.track_id)
         global_tid = camera_id * 10000 + local_tid
 
-        # Если это новый объект — логируем и отправляем уведомление
         if is_new_track(camera_id, global_tid):
             push_event(camera_id, global_tid)
 
             db = SessionLocal()
-            rec = DetectionRecord(
-                cam=camera_id,
-                track_id=global_tid,       # глобальный track ID
-                detected=True,
-                is_validated=False         # пока не подтверждено
-            )
+            rec = DetectionRecord(cam=camera_id, track_id=global_tid, detected=True)
             db.add(rec)
             db.commit()
             db.close()
 
-        # Отрисовка рамки и ID
         x1, y1, x2, y2 = map(int, tr.to_ltrb())
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(
