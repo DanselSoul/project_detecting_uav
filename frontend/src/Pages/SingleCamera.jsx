@@ -3,7 +3,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useWebSocket } from "../WebSocketProvider/WebSocketProvider";
 import Header from "../Components/Header";
 import Footer from "../Components/Footer";
-import NotificationPanel from "../Components/NotificationPanel";
 
 export default function SingleCamera({ onLogout }) {
   const { id } = useParams();
@@ -13,6 +12,7 @@ export default function SingleCamera({ onLogout }) {
   const [confirmed, setConfirmed] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isLive, setIsLive] = useState(true);
 
   const trackIds = alertMap[cam] || [];
   const latestTrackId = trackIds[trackIds.length - 1] || null;
@@ -43,29 +43,51 @@ export default function SingleCamera({ onLogout }) {
       setConfirmed(decision);
       clearTrack(cam, latestTrackId);
     } catch (err) {
-      console.error("Ошибка отправки:", err);
       setError("Сервер недоступен");
     } finally {
       setLoading(false);
     }
   };
 
+  const streamUrl = isLive
+    ? `http://localhost:8000/video-feed?cam=${cam}`
+    : `http://localhost:8000/replay?cam=${cam}`;
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-900 text-white">
       <Header onLogout={onLogout} />
 
       <main className="flex-grow px-4 py-6 max-w-[1280px] mx-auto w-full">
-        <button
-          onClick={() => nav(-1)}
-          className="mb-4 bg-blue-500 px-4 py-2 rounded text-white"
-        >
-          Назад
-        </button>
+        <div className="flex gap-3 mb-4">
+          <button
+            onClick={() => nav(-1)}
+            className="bg-blue-500 px-4 py-2 rounded text-white"
+          >
+            Назад
+          </button>
+          {!isLive && (
+            <button
+              onClick={() => setIsLive(true)}
+              className="bg-green-600 px-4 py-2 rounded text-white"
+            >
+              В прямой эфир
+            </button>
+          )}
+          {isLive && (
+            <button
+              onClick={() => setIsLive(false)}
+              className="bg-yellow-500 px-4 py-2 rounded text-white"
+            >
+              Показать последние 60 секунд
+            </button>
+          )}
+        </div>
+
         <h1 className="text-xl mb-4">Камера №{cam}</h1>
 
         <div className="w-full aspect-[16/9] bg-black rounded overflow-hidden">
           <img
-            src={`http://localhost:8000/video-feed?cam=${cam}`}
+            src={streamUrl}
             alt={`Камера ${cam}`}
             className="w-full h-full object-contain"
           />
@@ -98,12 +120,11 @@ export default function SingleCamera({ onLogout }) {
             Вы {confirmed ? "подтвердили" : "отклонили"} обнаружение
           </p>
         )}
-
         {error && (
           <p className="mt-4 text-red-500">Ошибка: {error}</p>
         )}
       </main>
-      <NotificationPanel />
+
       <Footer />
     </div>
   );

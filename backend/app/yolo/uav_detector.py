@@ -4,9 +4,9 @@ from ultralytics import YOLO
 from deep_sort_realtime.deepsort_tracker import DeepSort
 from backend.app.db import SessionLocal
 from backend.app.models.detection_record import DetectionRecord
-from backend.app.state.detection_state import (
-    is_new_track, push_event
-)
+from datetime import datetime
+
+from backend.app.state.detection_state import (is_new_track, push_event)
 
 # Загружаем YOLO модель один раз
 model = YOLO("backend/app/yolo/yolo11n_best.pt")
@@ -46,15 +46,14 @@ def detect_and_track(frame, camera_id: int, conf_threshold=0.5):
         # Если это новый объект — логируем и отправляем уведомление
         if is_new_track(camera_id, global_tid):
             push_event(camera_id, global_tid)
-
             db = SessionLocal()
-            rec = DetectionRecord(
+            db.add(DetectionRecord(
                 cam=camera_id,
-                track_id=global_tid,       # глобальный track ID
+                track_id=global_tid,
                 detected=True,
-                is_validated=False         # пока не подтверждено
-            )
-            db.add(rec)
+                is_validated=False,
+                timestamp=datetime.utcnow()  # желательно явно
+            ))
             db.commit()
             db.close()
 

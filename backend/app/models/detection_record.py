@@ -8,7 +8,7 @@ class DetectionRecord(Base):
     cam = Column(Integer, nullable=False)
     track_id = Column(Integer, nullable=False)  # 🔹 Глобальный ID объекта
     detected = Column(Boolean, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.utcnow())
     is_validated = Column(Boolean, default=False)  # 🔹 Подтверждено ли
 
 class ValidationRecord(Base):
