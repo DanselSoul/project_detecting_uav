@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useWebSocket } from "../WebSocketProvider/WebSocketProvider";
+import Header from "../Components/Header";
 
-export default function SingleCamera() {
+export default function SingleCamera({ onLogout }) {
   const { id } = useParams();
   const cam = Number(id) || 1;
   const nav = useNavigate();
@@ -48,51 +49,55 @@ export default function SingleCamera() {
   };
 
   return (
-    <div className="p-4 relative">
-      <button
-        onClick={() => nav(-1)}
-        className="mb-4 bg-blue-500 px-4 py-2 rounded text-white"
-      >
-        Назад
-      </button>
-      <h1 className="text-xl mb-4">Камера №{cam}</h1>
-      <img
-        src={`http://localhost:8000/video-feed?cam=${cam}`}
-        alt={`Камера ${cam}`}
-        className="w-full border rounded"
-      />
+    <div className="min-h-screen bg-gray-900 text-white">
+      <Header onLogout={onLogout} />
 
-      {showAlert && (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-4 rounded shadow-lg z-50">
-          <p className="mb-2 text-red-600">
-            Обнаружен объект (ID: {latestTrackId})
+      <div className="p-4">
+        <button
+          onClick={() => nav(-1)}
+          className="mb-4 bg-blue-500 px-4 py-2 rounded text-white"
+        >
+          Назад
+        </button>
+        <h1 className="text-xl mb-4">Камера №{cam}</h1>
+        <img
+          src={`http://localhost:8000/video-feed?cam=${cam}`}
+          alt={`Камера ${cam}`}
+          className="w-full border rounded"
+        />
+
+        {showAlert && (
+          <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-4 rounded shadow-lg z-50">
+            <p className="mb-2 text-red-600">
+              Обнаружен объект (ID: {latestTrackId})
+            </p>
+            <button
+              onClick={() => sendValidation(true)}
+              disabled={loading}
+              className="bg-green-500 text-white px-3 py-1 mr-2 rounded"
+            >
+              Подтвердить
+            </button>
+            <button
+              onClick={() => sendValidation(false)}
+              disabled={loading}
+              className="bg-gray-500 text-white px-3 py-1 rounded"
+            >
+              Отклонить
+            </button>
+          </div>
+        )}
+
+        {confirmed !== null && (
+          <p className="mt-4 text-green-400">
+            Вы {confirmed ? "подтвердили" : "отклонили"} обнаружение
           </p>
-          <button
-            onClick={() => sendValidation(true)}
-            disabled={loading}
-            className="bg-green-500 text-white px-3 py-1 mr-2 rounded"
-          >
-            Подтвердить
-          </button>
-          <button
-            onClick={() => sendValidation(false)}
-            disabled={loading}
-            className="bg-gray-500 text-white px-3 py-1 rounded"
-          >
-            Отклонить
-          </button>
-        </div>
-      )}
+        )}
 
-      {confirmed !== null && (
-        <p className="mt-4 text-green-400">
-          Вы {confirmed ? "подтвердили" : "отклонили"} обнаружение
-        </p>
-      )}
-
-      {error && (
-        <p className="mt-4 text-red-500">Ошибка: {error}</p>
-      )}
+        {error && (
+          <p className="mt-4 text-red-500">Ошибка: {error}</p>
+        )}
+      </div>
     </div>
   );
 }
