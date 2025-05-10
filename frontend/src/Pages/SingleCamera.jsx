@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useWebSocket } from "../WebSocketProvider/WebSocketProvider";
 import Header from "../Components/Header";
+import Footer from "../Components/Footer";
+import NotificationPanel from "../Components/NotificationPanel";
 
 export default function SingleCamera({ onLogout }) {
   const { id } = useParams();
@@ -49,10 +51,10 @@ export default function SingleCamera({ onLogout }) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen flex flex-col bg-gray-900 text-white">
       <Header onLogout={onLogout} />
 
-      <div className="p-4">
+      <main className="flex-grow px-4 py-6 max-w-[1280px] mx-auto w-full">
         <button
           onClick={() => nav(-1)}
           className="mb-4 bg-blue-500 px-4 py-2 rounded text-white"
@@ -60,14 +62,17 @@ export default function SingleCamera({ onLogout }) {
           Назад
         </button>
         <h1 className="text-xl mb-4">Камера №{cam}</h1>
-        <img
-          src={`http://localhost:8000/video-feed?cam=${cam}`}
-          alt={`Камера ${cam}`}
-          className="w-full border rounded"
-        />
+
+        <div className="w-full aspect-[16/9] bg-black rounded overflow-hidden">
+          <img
+            src={`http://localhost:8000/video-feed?cam=${cam}`}
+            alt={`Камера ${cam}`}
+            className="w-full h-full object-contain"
+          />
+        </div>
 
         {showAlert && (
-          <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-white p-4 rounded shadow-lg z-50">
+          <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-white p-4 rounded shadow-lg z-50 text-black">
             <p className="mb-2 text-red-600">
               Обнаружен объект (ID: {latestTrackId})
             </p>
@@ -97,7 +102,9 @@ export default function SingleCamera({ onLogout }) {
         {error && (
           <p className="mt-4 text-red-500">Ошибка: {error}</p>
         )}
-      </div>
+      </main>
+      <NotificationPanel />
+      <Footer />
     </div>
   );
 }
