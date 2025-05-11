@@ -5,14 +5,12 @@ import Login from "./auth/Login";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import MainStream from "./Pages/MainStream";
 import SingleCamera from "./Pages/SingleCamera";
-import { WebSocketProvider } from "./WebSocketProvider/WebSocketProvider";
 
 export default function App() {
   const { token, login, logout } = useAuth();
 
   return (
     <BrowserRouter>
-      <WebSocketProvider>
         <Routes>
           <Route path="/login" element={<Login onLogin={login} />} />
           <Route
@@ -32,7 +30,6 @@ export default function App() {
             }
           />
         </Routes>
-      </WebSocketProvider>
     </BrowserRouter>
   );
 }

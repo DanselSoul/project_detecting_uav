@@ -52,6 +52,7 @@ def detect_and_track(frame, camera_id: int, conf_threshold=0.5):
         if is_new_track(camera_id, global_tid):
             push_event(camera_id, global_tid)
             db = SessionLocal()
+            print(f"[TRACK] Camera {camera_id}, global_tid={global_tid}, local_tid={local_tid}")
             db.add(DetectionRecord(
                 cam=camera_id,
                 track_id=global_tid,
@@ -60,6 +61,7 @@ def detect_and_track(frame, camera_id: int, conf_threshold=0.5):
                 timestamp=datetime.utcnow()
             ))
             db.commit()
+            print(f"[DB] Detection saved: cam={camera_id}, global_tid={global_tid}")
             db.close()
 
         x1, y1, x2, y2 = map(int, tr.to_ltrb())

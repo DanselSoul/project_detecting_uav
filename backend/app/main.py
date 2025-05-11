@@ -75,7 +75,16 @@ async def alerts_socket(websocket: WebSocket):
             events = get_events()
             for cam_id, track_ids in events.items():
                 for tid in track_ids:
-                    detection = db.query(DetectionRecord).filter_by(cam=cam_id, track_id=tid).first()
+                    detection = (
+                        db.query(DetectionRecord)
+                        .filter(DetectionRecord.cam == cam_id, DetectionRecord.track_id == tid)
+                        .order_by(DetectionRecord.timestamp.desc())
+                        .first()
+                    )
+                    if detection is None:
+                        print(f"[WS] No detection found for cam={cam_id}, track_id={tid}")
+                    else:
+                        print(f"[WS] Sending alert for cam={cam_id}, track_id={tid}")
                     if detection and not detection.is_validated:
                         await websocket.send_text(f"camera {cam_id}: track {tid} detected")
     except WebSocketDisconnect:

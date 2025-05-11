@@ -15,6 +15,7 @@ def is_new_track(cam_id: int, track_id: int) -> bool:
 
 def push_event(cam_id: int, track_id: int) -> None:
     with _lock:
+        print(f"[PUSH] Queued alert for cam={cam_id}, track_id={track_id}")
         _new_events[cam_id].append(track_id)
 
 def get_events(cam_id: Optional[int] = None):
