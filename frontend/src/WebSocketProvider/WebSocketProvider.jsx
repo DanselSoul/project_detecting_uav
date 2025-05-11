@@ -1,68 +1,61 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 
-const WSContext = createContext();
-export const useWebSocket = () => useContext(WSContext);
+const WebSocketContext = createContext();
+export const useWebSocket = () => useContext(WebSocketContext);
 
-export function WebSocketProvider({ children }) {
-  const [message, setMessage] = useState("");
+export const WebSocketProvider = ({ children }) => {
   const [alertMap, setAlertMap] = useState({});
 
-  useEffect(() => {
-    const socket = new WebSocket(`ws://localhost:8000/ws/alerts`);
+  const ws = useRef(null);
 
-    // При подключении запрашиваем текущие активные тревоги
-    fetch("http://localhost:8000/active-alerts")
-      .then((res) => res.json())
-      .then((initial) => {
-        console.log("[WS] Initial alerts:", initial);
-        setAlertMap(initial);
+  const connectWebSocket = () => {
+    ws.current = new WebSocket("ws://localhost:8000/ws/alerts");
+
+    ws.current.onmessage = (event) => {
+      const match = event.data.match(/camera (\d+): track (\d+)/);
+      if (!match) return;
+
+      const cam = match[1];
+      const trackId = parseInt(match[2]);
+
+      setAlertMap((prev) => {
+        const updated = { ...prev };
+        if (!updated[cam]) updated[cam] = [];
+        if (!updated[cam].includes(trackId)) {
+          updated[cam].push(trackId);
+        }
+        return updated;
       });
-
-    socket.onopen = () => {
-      console.log("[WS] Connected to /ws/alerts");
     };
 
-    socket.onmessage = (e) => {
-      console.log("[WS] Message received:", e.data);
-      setMessage(e.data);
-
-      const match = e.data.match(/camera (\d+): track (\d+) detected/);
-      if (match) {
-        const cam = Number(match[1]);
-        const tid = Number(match[2]);
-
-        setAlertMap((prev) => {
-          const current = prev[cam] || [];
-          const updated = current.includes(tid) ? current : [...current, tid];
-          return { ...prev, [cam]: updated };
-        });
-      }
+    ws.current.onclose = () => {
+      setTimeout(connectWebSocket, 1000);
     };
+  };
 
-    socket.onerror = (err) => {
-      console.error("[WS] Error:", err);
-    };
-
-    socket.onclose = () => {
-      console.warn("[WS] Connection closed");
-    };
-
-    return () => {
-      socket.close();
-    };
+  useEffect(() => {
+    connectWebSocket();
+    return () => ws.current?.close();
   }, []);
 
-  const clearTrack = (cam, trackId) => {
-    setAlertMap((prev) => ({
-      ...prev,
-      [cam]: (prev[cam] || []).filter((t) => t !== trackId),
-    }));
-    setMessage("");
+  useEffect(() => {
+    localStorage.setItem("alertMap", JSON.stringify(alertMap));
+  }, [alertMap]);
+
+  const clearTrack = (camId, trackId) => {
+    setAlertMap((prev) => {
+      const updated = { ...prev };
+      updated[camId] = updated[camId]?.filter((tid) => tid !== trackId);
+      if (!updated[camId]?.length) {
+        delete updated[camId];
+      }
+      return updated;
+    });
   };
 
   return (
-    <WSContext.Provider value={{ message, alertMap, clearTrack }}>
+    <WebSocketContext.Provider value={{ alertMap, clearTrack }}>
       {children}
-    </WSContext.Provider>
+    </WebSocketContext.Provider>
   );
-}
+};

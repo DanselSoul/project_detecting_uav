@@ -5,14 +5,14 @@ from deep_sort_realtime.deepsort_tracker import DeepSort
 from backend.app.db import SessionLocal
 from backend.app.models.detection_record import DetectionRecord
 from datetime import datetime
+from time import time
 
-from backend.app.state.detection_state import (is_new_track, push_event)
+from backend.app.state.detection_state import is_new_track, push_event
 
-# Загружаем YOLO модель один раз
+track_id_map = {}
 model = YOLO("backend/app/yolo/yolo11n_best.pt")
-
-# Один DeepSort на каждую камеру
 _trackers = {}
+
 def get_tracker(camera_id: int):
     if camera_id not in _trackers:
         _trackers[camera_id] = DeepSort(
@@ -41,9 +41,14 @@ def detect_and_track(frame, camera_id: int, conf_threshold=0.5):
             continue
 
         local_tid = int(tr.track_id)
-        global_tid = camera_id * 10000 + local_tid
+        key = (camera_id, local_tid)
 
-        # Если это новый объект — логируем и отправляем уведомление
+        if key not in track_id_map:
+            global_tid = camera_id * 10**13 + int(time() * 1000)
+            track_id_map[key] = global_tid
+        else:
+            global_tid = track_id_map[key]
+
         if is_new_track(camera_id, global_tid):
             push_event(camera_id, global_tid)
             db = SessionLocal()
@@ -52,12 +57,11 @@ def detect_and_track(frame, camera_id: int, conf_threshold=0.5):
                 track_id=global_tid,
                 detected=True,
                 is_validated=False,
-                timestamp=datetime.utcnow()  # желательно явно
+                timestamp=datetime.utcnow()
             ))
             db.commit()
             db.close()
 
-        # Отрисовка рамки и ID
         x1, y1, x2, y2 = map(int, tr.to_ltrb())
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
         cv2.putText(

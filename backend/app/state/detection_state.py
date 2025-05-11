@@ -3,7 +3,6 @@ from collections import defaultdict
 from typing import Optional, Dict, List
 
 _lock = Lock()
-
 _notified_tracks: Dict[int, set] = defaultdict(set)
 _new_events: Dict[int, List[int]] = defaultdict(list)
 
