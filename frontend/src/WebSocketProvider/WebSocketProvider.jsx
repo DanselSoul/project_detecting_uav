@@ -4,7 +4,8 @@ const WebSocketContext = createContext();
 export const useWebSocket = () => useContext(WebSocketContext);
 
 export const WebSocketProvider = ({ children }) => {
-  const [alertMap, setAlertMap] = useState({});
+  const [alertMap, setAlertMap] = useState({});\
+  const [alarms, setAlarms] = useState(new Set());   
   const ws = useRef(null);
   const isConnected = useRef(false);
 

@@ -36,6 +36,11 @@ def detect_and_track(frame, camera_id: int, conf_threshold=0.5):
     tracker = get_tracker(camera_id)
     tracks = tracker.update_tracks(dets, frame=frame)
 
+    current_keys = {(camera_id, int(tr.track_id)) for tr in tracks if tr.is_confirmed()}
+    obsolete = set(track_id_map.keys()) - current_keys
+    for key in obsolete:
+        del track_id_map[key]
+
     for tr in tracks:
         if not tr.is_confirmed():
             continue

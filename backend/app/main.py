@@ -7,7 +7,7 @@ from sqlalchemy import and_
 
 from backend.app.routes import auth
 from backend.app.stream.streamer import video_generator
-from backend.app.state.detection_state import get_events
+from backend.app.state.detection_state import get_events, clear_cam, get_active_alerts
 from backend.app.db import SessionLocal
 from backend.app.models.detection_record import DetectionRecord, ValidationRecord
 
@@ -68,6 +68,8 @@ def get_active():
 @app.websocket("/ws/alerts")
 async def alerts_socket(websocket: WebSocket):
     await websocket.accept()
+    for cam_id in get_active_alerts().keys():
+        clear_cam(cam_id)
     db = SessionLocal()
     try:
         while True:
