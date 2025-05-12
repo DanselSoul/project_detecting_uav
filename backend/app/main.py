@@ -7,7 +7,9 @@ from sqlalchemy import and_
 
 from backend.app.routes import auth
 from backend.app.stream.streamer import video_generator
-from backend.app.state.detection_state import get_events, clear_cam, get_active_alerts
+from backend.app.state.detection_state import (
+    get_events, get_alarm_events, clear_cam, start_alarm, stop_alarm
+)
 from backend.app.db import SessionLocal
 from backend.app.models.detection_record import DetectionRecord, ValidationRecord
 
@@ -68,8 +70,6 @@ def get_active():
 @app.websocket("/ws/alerts")
 async def alerts_socket(websocket: WebSocket):
     await websocket.accept()
-    for cam_id in get_active_alerts().keys():
-        clear_cam(cam_id)
     db = SessionLocal()
     try:
         while True:
@@ -89,6 +89,17 @@ async def alerts_socket(websocket: WebSocket):
                         print(f"[WS] Sending alert for cam={cam_id}, track_id={tid}")
                     if detection and not detection.is_validated:
                         await websocket.send_text(f"camera {cam_id}: track {tid} detected")
+            alarms = get_alarm_events()   # e.g. [1, -2, 3]
+            print(f"[WS] Alarm events fetched: {alarms}")
+            for ev in alarms:
+                if ev > 0:
+                    cam = ev
+                    print(f"[WS] Sending ALARM START for cam={cam}")
+                    await websocket.send_text(f"alarm_start camera {cam}")
+                else:
+                    cam = abs(ev)
+                    print(f"[WS] Sending ALARM STOP  for cam={cam}")
+                    await websocket.send_text(f"alarm_stop camera {cam}")
     except WebSocketDisconnect:
         pass
     finally:
@@ -120,6 +131,12 @@ def validate_detection(
         db.add(validation)
         detection.is_validated = True
         db.commit()
+        if validated:
+            start_alarm(cam)
+            print(f"[WS] start_alarm called for cam={cam}")
+        else:
+            stop_alarm(cam)
+            print(f"[WS] stop_alarm called for cam={cam}")
         return {"status": "ok", "validated": validated}
     finally:
         db.close()

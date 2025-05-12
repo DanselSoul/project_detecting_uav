@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useWebSocket } from "../WebSocketProvider/WebSocketProvider";
 import Header from "../Components/Header";
 import Footer from "../Components/Footer";
-import NotificationPanel from "../Components/NotificationPanel";
+import { AlarmBanner } from "../Components/AlarmBanner";
 
 const cameras = [1, 2, 3, 4].map((i) => ({
   id: i,
@@ -13,7 +13,7 @@ const cameras = [1, 2, 3, 4].map((i) => ({
 
 export default function MainStream({ onLogout }) {
   const navigate = useNavigate();
-  const { alertMap } = useWebSocket();
+  const { alertMap, alarms, stopAlarm } = useWebSocket();
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-900 text-white">
@@ -21,6 +21,16 @@ export default function MainStream({ onLogout }) {
 
       <main className="flex-grow px-4 py-6 max-w-[1080px] mx-auto w-full">
         <h1 className="text-2xl font-bold mb-6">Потоки с камер</h1>
+
+        {/* Баннеры тревоги */}
+        {alarms.map((cam) => (
+          <AlarmBanner
+            key={`alarm-${cam}`}
+            cameraId={cam}
+            onStop={() => stopAlarm(cam)}
+          />
+        ))}
+
         <div className="grid gap-6 grid-cols-[repeat(auto-fit,minmax(500px,1fr))]">
           {cameras.map((cam) => (
             <div
@@ -42,7 +52,7 @@ export default function MainStream({ onLogout }) {
           ))}
         </div>
       </main>
-      <NotificationPanel />
+
       <Footer />
     </div>
   );
