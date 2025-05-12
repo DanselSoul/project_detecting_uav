@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 import asyncio
 from datetime import datetime
 from sqlalchemy import and_
+from sqlalchemy.orm import Session
 
 from backend.app.routes import auth
 from backend.app.stream.streamer import video_generator
@@ -31,6 +32,12 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/auth")
 
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @app.get("/ping")
 def ping():
@@ -160,3 +167,24 @@ def alarm_stop_endpoint(
 ):
     stop_alarm(cam)
     return {"status": "ok"}
+
+@app.get("/detections")
+def get_recent_detections(
+    limit: int = Query(100, gt=0, le=1000),
+    db: Session = Depends(get_db),
+):
+    recs = (
+        db.query(DetectionRecord)
+          .order_by(DetectionRecord.timestamp.desc())
+          .limit(limit)
+          .all()
+    )
+    # вернём упрощённую структуру
+    return [
+        {
+          "camera": r.cam,
+          "track_id": r.track_id,
+          "timestamp": r.timestamp.isoformat(),
+        }
+        for r in recs
+    ]
