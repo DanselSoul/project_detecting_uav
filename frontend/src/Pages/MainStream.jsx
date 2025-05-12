@@ -4,6 +4,7 @@ import { useWebSocket } from "../WebSocketProvider/WebSocketProvider";
 import Header from "../Components/Header";
 import Footer from "../Components/Footer";
 import { AlarmBanner } from "../Components/AlarmBanner";
+import NotificationPanel from "../Components/NotificationPanel";
 
 const cameras = [1, 2, 3, 4].map((i) => ({
   id: i,
@@ -52,7 +53,7 @@ export default function MainStream({ onLogout }) {
           ))}
         </div>
       </main>
-
+      <NotificationPanel/>
       <Footer />
     </div>
   );

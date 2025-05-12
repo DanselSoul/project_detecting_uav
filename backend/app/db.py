@@ -15,6 +15,7 @@ Base = declarative_base()
 
 from backend.app.models.user import User           # все ваши модели, в т.ч. DetectionRecord
 from backend.app.models.detection_record import DetectionRecord
+from backend.app.models.alarm_record     import AlarmRecord  
 
 # автоматически создаём все таблицы, если их нет
 Base.metadata.create_all(bind=engine)

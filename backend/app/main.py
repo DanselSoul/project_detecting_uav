@@ -11,7 +11,11 @@ from backend.app.state.detection_state import (
     get_events, get_alarm_events, clear_cam, start_alarm, stop_alarm
 )
 from backend.app.db import SessionLocal
+from fastapi import Depends
+from backend.app.models.alarm_record import AlarmRecord
+from backend.app.routes.auth import get_current_user
 from backend.app.models.detection_record import DetectionRecord, ValidationRecord
+from backend.app.models.user import User
 
 startup_time = datetime.utcnow()
 
@@ -90,7 +94,6 @@ async def alerts_socket(websocket: WebSocket):
                     if detection and not detection.is_validated:
                         await websocket.send_text(f"camera {cam_id}: track {tid} detected")
             alarms = get_alarm_events()   # e.g. [1, -2, 3]
-            print(f"[WS] Alarm events fetched: {alarms}")
             for ev in alarms:
                 if ev > 0:
                     cam = ev
@@ -112,7 +115,8 @@ def validate_detection(
     track_id: int = Body(...),
     validated: bool = Body(...),
     comment: str = Body(default=None),
-    decision_source: str = Body(default="operator")
+    decision_source: str = Body(default="operator"),
+    current_user: User = Depends(get_current_user, use_cache=False)
 ):
     db = SessionLocal()
     try:
@@ -131,6 +135,14 @@ def validate_detection(
         db.add(validation)
         detection.is_validated = True
         db.commit()
+        action = "start" if validated else "stop"
+        alarm = AlarmRecord(
+            detection_id=detection.id,
+            user_id=current_user.id,
+            action=action
+        )
+        db.add(alarm)
+        db.commit()
         if validated:
             start_alarm(cam)
             print(f"[WS] start_alarm called for cam={cam}")
@@ -140,3 +152,11 @@ def validate_detection(
         return {"status": "ok", "validated": validated}
     finally:
         db.close()
+
+@app.post("/alarm/stop")
+def alarm_stop_endpoint(
+    cam: int = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+):
+    stop_alarm(cam)
+    return {"status": "ok"}
