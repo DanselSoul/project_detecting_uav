@@ -10,8 +10,6 @@ from backend.app.security.auth import create_access_token, verify_password, SECR
 router = APIRouter(
     tags=["auth"],
 )
-
-# этот dependency понадобится для защиты других эндпоинтов
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 def get_db():

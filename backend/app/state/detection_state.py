@@ -1,16 +1,11 @@
-# backend/app/state/detection_state.py
-
 from threading import Lock
 from collections import defaultdict
 from typing import Dict, List, Set
-
 _lock = Lock()
 
-# уже был
 _notified_tracks: Dict[int, Set[int]] = defaultdict(set)
 _new_events: Dict[int, List[int]] = defaultdict(list)
 
-# добавляем state тревоги
 _active_alarms: Set[int] = set()
 _new_alarm_events: List[int] = []
 
@@ -40,11 +35,7 @@ def clear_cam(cam_id: int) -> None:
         _notified_tracks.pop(cam_id, None)
         _new_events.pop(cam_id, None)
 
-
-# ————— логика тревоги —————
-
 def start_alarm(cam_id: int):
-    """Запустить тревогу один раз для cam_id."""
     with _lock:
         if cam_id not in _active_alarms:
             _active_alarms.add(cam_id)
@@ -52,7 +43,6 @@ def start_alarm(cam_id: int):
 
 
 def stop_alarm(cam_id: int):
-    """Остановить тревогу один раз для cam_id."""
     with _lock:
         if cam_id in _active_alarms:
             _active_alarms.remove(cam_id)
@@ -60,7 +50,6 @@ def stop_alarm(cam_id: int):
 
 
 def get_alarm_events() -> List[int]:
-    """Возвращает список int: +cam → start, –cam → stop."""
     with _lock:
         ev = _new_alarm_events.copy()
         _new_alarm_events.clear()
