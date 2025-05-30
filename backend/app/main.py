@@ -188,3 +188,11 @@ def get_recent_detections(
         }
         for r in recs
     ]
+
+@app.post("/alarm/start")
+def alarm_start_endpoint(
+    cam: int = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+):
+    start_alarm(cam)
+    return {"status": "ok"}

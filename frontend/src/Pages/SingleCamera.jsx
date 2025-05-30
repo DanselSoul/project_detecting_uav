@@ -19,6 +19,7 @@ export default function SingleCamera({ onLogout }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isLive, setIsLive] = useState(true);
+  const [alarmLoading, setAlarmLoading] = useState(false);
 
   const sendValidation = async (decision) => {
     if (!latestTrackId) return;
@@ -50,6 +51,28 @@ export default function SingleCamera({ onLogout }) {
     }
   };
 
+  // 🚨 Новый метод для запуска тревоги
+  const handleStartAlarm = async () => {
+    setAlarmLoading(true);
+    setError("");
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch("http://localhost:8000/alarm/start", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ cam }),
+      });
+      if (!res.ok) throw new Error("Ошибка при запуске тревоги");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAlarmLoading(false);
+    }
+  };
+
   const streamUrl = isLive
     ? `http://localhost:8000/video-feed?cam=${cam}`
     : `http://localhost:8000/replay?cam=${cam}`;
@@ -71,21 +94,14 @@ export default function SingleCamera({ onLogout }) {
           >
             Назад
           </button>
-          {!isLive ? (
-            <button
-              onClick={() => setIsLive(true)}
-              className="bg-green-600 px-4 py-2 rounded text-white"
-            >
-              В прямой эфир
-            </button>
-          ) : (
-            <button
-              onClick={() => setIsLive(false)}
-              className="bg-yellow-500 px-4 py-2 rounded text-white"
-            >
-              Показать последние 60 секунд
-            </button>
-          )}
+          {/* Кнопка запуска тревоги */}
+          <button
+            onClick={handleStartAlarm}
+            className="bg-red-600 px-4 py-2 rounded text-white"
+            disabled={alarmLoading}
+          >
+            {alarmLoading ? "Запуск..." : "Запустить тревогу"}
+          </button>
         </div>
 
         <h1 className="text-xl mb-4">Камера №{cam}</h1>
